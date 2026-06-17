@@ -35,7 +35,7 @@ namespace GameLauncher
         private void InitializeUI()
         {
             this.Text = "個人遊戲啟動與時數統計平台";
-            this.Size = new Size(1600, 1200);
+            this.Size = new Size(800, 600);
             this.BackColor = Color.FromArgb(30, 30, 30); // 深色主題
 
             btnAddGame = new Button();
@@ -61,6 +61,26 @@ namespace GameLauncher
             cmbCategoryFilter.Size = new Size(150, 25);
             cmbCategoryFilter.DropDownStyle = ComboBoxStyle.DropDownList; // 限制只能用選的，不能手打
             cmbCategoryFilter.SelectedIndexChanged += CmbCategoryFilter_SelectedIndexChanged; // 綁定切換事件
+
+            Button btnDashboard = new Button();
+            btnDashboard.Text = "📊 數據儀表板";
+            btnDashboard.Font = new Font("微軟正黑體", 10, FontStyle.Bold);
+            btnDashboard.Size = new Size(130, 40);
+            btnDashboard.Location = new Point(450, 20); // 放在下拉選單右邊
+            btnDashboard.BackColor = Color.Indigo;
+            btnDashboard.ForeColor = Color.White;
+            btnDashboard.FlatStyle = FlatStyle.Flat;
+
+            // 綁定點擊事件，開啟 Dashboard 視窗
+            btnDashboard.Click += (s, e) =>
+            {
+                using (DashboardForm dashboard = new DashboardForm())
+                {
+                    dashboard.ShowDialog();
+                }
+            };
+
+            this.Controls.Add(btnDashboard);
 
             this.Controls.Add(lblFilter);
             this.Controls.Add(cmbCategoryFilter);

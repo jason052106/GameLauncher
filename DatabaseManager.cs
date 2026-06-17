@@ -196,5 +196,71 @@ namespace GameLauncher
             }
             return categories;
         }
+
+        // 1. 取得總遊玩時數 (所有遊戲加總)
+        public int GetAllGamesTotalPlayTime()
+        {
+            using (SQLiteConnection conn = new SQLiteConnection(connectionString))
+            {
+                conn.Open();
+                string query = "SELECT SUM(DurationSeconds) FROM PlaySessions";
+                using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
+                {
+                    object result = cmd.ExecuteScalar();
+                    return result != DBNull.Value && result != null ? Convert.ToInt32(result) : 0;
+                }
+            }
+        }
+
+        public Dictionary<string, int> GetTop3Games()
+        {
+            Dictionary<string, int> topGames = new Dictionary<string, int>();
+            using (SQLiteConnection conn = new SQLiteConnection(connectionString))
+            {
+                conn.Open();
+                // 結合兩張表 (JOIN)，並用 GROUP BY 加總時數，最後排序取前 3 名
+                string query = @"SELECT g.Name, SUM(p.DurationSeconds) as TotalTime 
+                         FROM PlaySessions p
+                         JOIN Games g ON p.GameId = g.Id
+                         GROUP BY p.GameId
+                         ORDER BY TotalTime DESC
+                         LIMIT 3";
+                using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
+                using (SQLiteDataReader reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        topGames.Add(reader["Name"].ToString(), Convert.ToInt32(reader["TotalTime"]));
+                    }
+                }
+            }
+            return topGames;
+        }
+
+        public Dictionary<string, int> GetLast7DaysPlayTime()
+        {
+            Dictionary<string, int> dailyStats = new Dictionary<string, int>();
+            using (SQLiteConnection conn = new SQLiteConnection(connectionString))
+            {
+                conn.Open();
+                // 使用 SQLite 的 date() 函數將時間截斷至「日」，並加總每天的秒數
+                string query = @"SELECT date(PlayDate) as PlayDay, SUM(DurationSeconds) as DailyTotal
+                         FROM PlaySessions
+                         WHERE PlayDate >= date('now', '-7 days')
+                         GROUP BY PlayDay
+                         ORDER BY PlayDay ASC";
+                using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
+                using (SQLiteDataReader reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        // 日期格式化為 MM/dd，例如 06/15
+                        DateTime parsedDate = DateTime.Parse(reader["PlayDay"].ToString());
+                        dailyStats.Add(parsedDate.ToString("MM/dd"), Convert.ToInt32(reader["DailyTotal"]));
+                    }
+                }
+            }
+            return dailyStats;
+        }
     }
 }
