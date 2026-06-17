@@ -31,7 +31,8 @@ namespace GameLauncher
                 string createGamesTable = @"CREATE TABLE IF NOT EXISTS Games (
                                             Id INTEGER PRIMARY KEY AUTOINCREMENT,
                                             Name TEXT NOT NULL,
-                                            ExecutablePath TEXT NOT NULL)";
+                                            ExecutablePath TEXT NOT NULL,
+                                            CoverImagePath TEXT)";
 
                 string createPlaySessionsTable = @"CREATE TABLE IF NOT EXISTS PlaySessions (
                                                    SessionId INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,16 +46,17 @@ namespace GameLauncher
         }
 
         // 新增遊戲到資料庫
-        public void AddGame(string name, string path)
+        public void AddGame(string name, string path, string coverPath ="")
         {
             using (SQLiteConnection conn = new SQLiteConnection(connectionString))
             {
                 conn.Open();
-                string query = "INSERT INTO Games (Name, ExecutablePath) VALUES (@Name, @Path)";
+                string query = "INSERT INTO Games (Name, ExecutablePath, CoverImagePath) VALUES (@Name, @Path, @CoverPath)";
                 using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
                 {
                     cmd.Parameters.AddWithValue("@Name", name);
                     cmd.Parameters.AddWithValue("@Path", path);
+                    cmd.Parameters.AddWithValue("@CoverPath", coverPath);
                     cmd.ExecuteNonQuery();
                 }
             }
@@ -67,7 +69,7 @@ namespace GameLauncher
             using (SQLiteConnection conn = new SQLiteConnection(connectionString))
             {
                 conn.Open();
-                string query = "SELECT Id, Name, ExecutablePath FROM Games";
+                string query = "SELECT Id, Name, ExecutablePath, CoverImagePath FROM Games";
                 using (SQLiteCommand cmd = new SQLiteCommand(query, conn))
                 using (SQLiteDataReader reader = cmd.ExecuteReader())
                 {
@@ -76,7 +78,8 @@ namespace GameLauncher
                         games.Add(new Game(
                             Convert.ToInt32(reader["Id"]),
                             reader["Name"].ToString(),
-                            reader["ExecutablePath"].ToString()
+                            reader["ExecutablePath"].ToString(),
+                            reader["CoverImagePath"].ToString()
                         ));
                     }
                 }

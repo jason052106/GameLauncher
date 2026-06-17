@@ -80,33 +80,48 @@ namespace GameLauncher
 
             foreach (var game in games)
             {
+                // 調整卡片大小以容納圖片
                 Panel card = new Panel();
-                card.Size = new Size(200, 100);
+                card.Size = new Size(200, 320);
                 card.BackColor = Color.FromArgb(50, 50, 50);
                 card.Margin = new Padding(10);
+
+                // 新增 PictureBox 來顯示封面
+                PictureBox picCover = new PictureBox();
+                picCover.Size = new Size(180, 240);
+                picCover.Location = new Point(10, 10);
+                picCover.SizeMode = PictureBoxSizeMode.Zoom; // 讓圖片維持比例縮放
+                picCover.Image = GetGameCover(game); // 呼叫我們剛剛寫的函數！
+
+                // （進階巧思）點擊圖片也可以啟動遊戲
+                picCover.Cursor = Cursors.Hand;
+                picCover.Tag = game;
+                picCover.Click += BtnPlay_Click;
 
                 Label lblName = new Label();
                 lblName.Text = game.Name;
                 lblName.ForeColor = Color.White;
                 lblName.AutoSize = false;
-                lblName.Size = new Size(180, 40);
-                lblName.Location = new Point(10, 10);
-                lblName.Font = new Font("微軟正黑體", 12, FontStyle.Bold);
+                lblName.Size = new Size(180, 25);
+                lblName.Location = new Point(10, 260);
+                lblName.Font = new Font("微軟正黑體", 10, FontStyle.Bold);
+                lblName.TextAlign = ContentAlignment.MiddleCenter;
 
                 Button btnPlay = new Button();
-                btnPlay.Text = "啟動遊玩";
-                btnPlay.Size = new Size(180, 30);
-                btnPlay.Location = new Point(10, 60);
+                btnPlay.Text = "啟動";
+                btnPlay.Size = new Size(180, 25);
+                btnPlay.Location = new Point(10, 290);
                 btnPlay.BackColor = Color.DarkOliveGreen;
                 btnPlay.ForeColor = Color.White;
                 btnPlay.FlatStyle = FlatStyle.Flat;
-
-                // 將 game 物件綁定到按鈕的 Tag，方便點擊時讀取
                 btnPlay.Tag = game;
                 btnPlay.Click += BtnPlay_Click;
 
+                // 依序把控制項加進卡片
+                card.Controls.Add(picCover);
                 card.Controls.Add(lblName);
                 card.Controls.Add(btnPlay);
+
                 flowLayoutPanel.Controls.Add(card);
             }
         }
@@ -168,6 +183,45 @@ namespace GameLauncher
                     MessageBox.Show($"遊戲結束！本次遊玩時間: {durationSeconds} 秒\n紀錄已寫入資料庫。", "統計完成");
                 });
             }
+        }
+
+        private Image GetGameCover(Game game)
+        {
+            try
+            {
+                // 1. 檢查是否有使用者自訂的封面且檔案真實存在
+                if (!string.IsNullOrEmpty(game.CoverImagePath) && File.Exists(game.CoverImagePath))
+                {
+                    // 使用 FileStream 讀取，避免檔案被系統鎖死
+                    using (FileStream fs = new FileStream(game.CoverImagePath, FileMode.Open, FileAccess.Read))
+                    {
+                        return Image.FromStream(fs);
+                    }
+                }
+
+                // 2. 如果沒有自訂封面，自動從 .exe 檔案中抽出預設 Icon
+                if (File.Exists(game.ExecutablePath))
+                {
+                    Icon appIcon = Icon.ExtractAssociatedIcon(game.ExecutablePath);
+                    if (appIcon != null)
+                    {
+                        return appIcon.ToBitmap(); // 將 Icon 轉為 WinForms 可用的 Bitmap
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"讀取封面失敗: {ex.Message}");
+            }
+
+            // 3. 如果前兩者都失敗，回傳一個全黑的預設圖片 (防呆機制)
+            Bitmap defaultBmp = new Bitmap(180, 240);
+            using (Graphics g = Graphics.FromImage(defaultBmp))
+            {
+                g.Clear(Color.DarkGray);
+                g.DrawString("No Image", new Font("Arial", 12), Brushes.White, new PointF(50, 100));
+            }
+            return defaultBmp;
         }
     }
 }
