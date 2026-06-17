@@ -33,11 +33,12 @@ namespace GameLauncher
         private void InitializeUI()
         {
             this.Text = "個人遊戲啟動與時數統計平台";
-            this.Size = new Size(800, 600);
+            this.Size = new Size(1600, 1200);
             this.BackColor = Color.FromArgb(30, 30, 30); // 深色主題
 
             btnAddGame = new Button();
             btnAddGame.Text = "新增本地遊戲 (+)";
+            btnAddGame.Font = new Font("微軟正黑體", 10, FontStyle.Bold);
             btnAddGame.Size = new Size(150, 40);
             btnAddGame.Location = new Point(20, 20);
             btnAddGame.BackColor = Color.Teal;
@@ -109,6 +110,7 @@ namespace GameLauncher
 
                 Button btnPlay = new Button();
                 btnPlay.Text = "啟動";
+                btnPlay.Font = new Font("微軟正黑體", 10, FontStyle.Bold);
                 btnPlay.Size = new Size(180, 25);
                 btnPlay.Location = new Point(10, 290);
                 btnPlay.BackColor = Color.DarkOliveGreen;
@@ -129,14 +131,21 @@ namespace GameLauncher
         // 啟動遊戲與監聽邏輯
         private void BtnPlay_Click(object sender, EventArgs e)
         {
-            Button btn = sender as Button;
-            Game game = btn.Tag as Game;
+            // 1. 將 sender 轉型為通用的 Control (無論是 Button 還是 PictureBox 都能接住)
+            Control clickedControl = sender as Control;
+            if (clickedControl == null) return;
 
+            // 2. 從 Tag 中取出 Game 物件
+            Game game = clickedControl.Tag as Game;
+            if (game == null) return;
+
+            // 3. 防呆檢查
             if (activeGames.ContainsKey(game.Id))
             {
                 MessageBox.Show("該遊戲已經在執行中！", "系統提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
+
             if (!File.Exists(game.ExecutablePath))
             {
                 MessageBox.Show("找不到執行檔，請確認遊戲是否已移除。", "錯誤", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -147,17 +156,39 @@ namespace GameLauncher
             {
                 Process process = new Process();
                 process.StartInfo.FileName = game.ExecutablePath;
-                process.EnableRaisingEvents = true; // 允許觸發 Exited 事件
+                process.EnableRaisingEvents = true;
 
-                // 這裡必須傳遞 game.Id 給監聽事件，所以用 Lambda 表達式
                 process.Exited += (s, args) => Process_Exited(game.Id);
 
                 process.Start();
-                activeGames.Add(game.Id, DateTime.Now); // 記錄開始時間
+                activeGames.Add(game.Id, DateTime.Now);
 
-                btn.Text = "執行中...";
-                btn.BackColor = Color.Gray;
-                btn.Enabled = false;
+                // 4. UI 狀態更新邏輯
+                Button btnToUpdate = null;
+                if (clickedControl is Button)
+                {
+                    btnToUpdate = (Button)clickedControl; // 點擊的就是按鈕
+                }
+                else if (clickedControl is PictureBox)
+                {
+                    // 如果點擊的是圖片，從圖片的父容器 (Panel) 裡面找出按鈕
+                    foreach (Control c in clickedControl.Parent.Controls)
+                    {
+                        if (c is Button)
+                        {
+                            btnToUpdate = (Button)c;
+                            break;
+                        }
+                    }
+                }
+
+                // 確實更新按鈕外觀
+                if (btnToUpdate != null)
+                {
+                    btnToUpdate.Text = "執行中...";
+                    btnToUpdate.BackColor = Color.Gray;
+                    btnToUpdate.Enabled = false;
+                }
             }
             catch (Exception ex)
             {
