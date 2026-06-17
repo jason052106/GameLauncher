@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.IO;
 using System.Diagnostics;
+using System.Linq;
 
 namespace GameLauncher
 {
@@ -17,6 +18,7 @@ namespace GameLauncher
         private DatabaseManager dbManager;
         private FlowLayoutPanel flowLayoutPanel;
         private Button btnAddGame;
+        private ComboBox cmbCategoryFilter;
 
         // 紀錄遊戲啟動時間的字典 (防呆：防止同一款遊戲重複啟動)
         private Dictionary<int, DateTime> activeGames = new Dictionary<int, DateTime>();
@@ -47,6 +49,22 @@ namespace GameLauncher
             btnAddGame.Click += BtnAddGame_Click;
             this.Controls.Add(btnAddGame);
 
+            Label lblFilter = new Label();
+            lblFilter.Text = "分類篩選:";
+            lblFilter.ForeColor = Color.White;
+            lblFilter.Location = new Point(190, 30);
+            lblFilter.AutoSize = true;
+            lblFilter.Font = new Font("微軟正黑體", 10, FontStyle.Bold);
+
+            cmbCategoryFilter = new ComboBox();
+            cmbCategoryFilter.Location = new Point(270, 27);
+            cmbCategoryFilter.Size = new Size(150, 25);
+            cmbCategoryFilter.DropDownStyle = ComboBoxStyle.DropDownList; // 限制只能用選的，不能手打
+            cmbCategoryFilter.SelectedIndexChanged += CmbCategoryFilter_SelectedIndexChanged; // 綁定切換事件
+
+            this.Controls.Add(lblFilter);
+            this.Controls.Add(cmbCategoryFilter);
+
             flowLayoutPanel = new FlowLayoutPanel();
             flowLayoutPanel.Location = new Point(20, 80);
             flowLayoutPanel.Size = new Size(740, 460);
@@ -68,7 +86,7 @@ namespace GameLauncher
                     string name = Path.GetFileNameWithoutExtension(path);
 
                     dbManager.AddGame(name, path);
-                    LoadGamesToUI(); // 重新載入畫面
+                    LoadGamesToUI(); 
                 }
             }
         }
@@ -77,41 +95,57 @@ namespace GameLauncher
         private void LoadGamesToUI()
         {
             flowLayoutPanel.Controls.Clear();
+            RefreshCategoryFilter();
             List<Game> games = dbManager.GetAllGames();
+
+            string selectedFilter = cmbCategoryFilter.SelectedItem?.ToString() ?? "全部";
+            List<Game> displayGames = (selectedFilter == "全部")
+                              ? games
+                              : games.Where(g => g.Category == selectedFilter).ToList();
 
             foreach (var game in games)
             {
-                // 調整卡片大小以容納圖片
                 Panel card = new Panel();
-                card.Size = new Size(200, 320);
+                card.Size = new Size(200, 410); 
                 card.BackColor = Color.FromArgb(50, 50, 50);
                 card.Margin = new Padding(10);
 
-                // 新增 PictureBox 來顯示封面
+                // 1. 遊戲封面
                 PictureBox picCover = new PictureBox();
-                picCover.Size = new Size(180, 240);
+                picCover.Size = new Size(180, 210); // 縮小一點圖片，留空間給文字
                 picCover.Location = new Point(10, 10);
-                picCover.SizeMode = PictureBoxSizeMode.Zoom; // 讓圖片維持比例縮放
-                picCover.Image = GetGameCover(game); // 呼叫我們剛剛寫的函數！
-
-                // （進階巧思）點擊圖片也可以啟動遊戲
+                picCover.SizeMode = PictureBoxSizeMode.Zoom;
+                picCover.Image = GetGameCover(game);
                 picCover.Cursor = Cursors.Hand;
                 picCover.Tag = game;
                 picCover.Click += BtnPlay_Click;
 
+                // 2. 遊戲名稱
                 Label lblName = new Label();
                 lblName.Text = game.Name;
                 lblName.ForeColor = Color.White;
                 lblName.AutoSize = false;
                 lblName.Size = new Size(180, 25);
-                lblName.Location = new Point(10, 260);
-                lblName.Font = new Font("微軟正黑體", 10, FontStyle.Bold);
+                lblName.Location = new Point(10, 230);
+                lblName.Font = new Font("微軟正黑體", 11, FontStyle.Bold);
                 lblName.TextAlign = ContentAlignment.MiddleCenter;
 
+                // 3. 總遊玩時間標籤 (新功能)
+                int totalSeconds = dbManager.GetTotalPlayTimeSeconds(game.Id);
+                Label lblTime = new Label();
+                lblTime.Text = $"總時數: {FormatPlayTime(totalSeconds)}";
+                lblTime.ForeColor = Color.YellowGreen; // 使用明顯的顏色提示
+                lblTime.AutoSize = false;
+                lblTime.Size = new Size(180, 20);
+                lblTime.Location = new Point(10, 260);
+                lblTime.Font = new Font("微軟正黑體", 9, FontStyle.Regular);
+                lblTime.TextAlign = ContentAlignment.MiddleCenter;
+
+                // 4. 啟動按鈕
                 Button btnPlay = new Button();
-                btnPlay.Text = "啟動";
-                btnPlay.Font = new Font("微軟正黑體", 10, FontStyle.Bold);
-                btnPlay.Size = new Size(180, 25);
+                btnPlay.Text = "啟動遊戲";
+                btnPlay.Font = new Font("微軟正黑體", 9, FontStyle.Regular);
+                btnPlay.Size = new Size(180, 30);
                 btnPlay.Location = new Point(10, 290);
                 btnPlay.BackColor = Color.DarkOliveGreen;
                 btnPlay.ForeColor = Color.White;
@@ -119,10 +153,57 @@ namespace GameLauncher
                 btnPlay.Tag = game;
                 btnPlay.Click += BtnPlay_Click;
 
-                // 依序把控制項加進卡片
+                // 5. 詳細統計按鈕 (新功能)
+                Button btnDetails = new Button();
+                btnDetails.Text = "詳細紀錄";
+                btnDetails.Font = new Font("微軟正黑體", 9, FontStyle.Regular);
+                btnDetails.Size = new Size(180, 25);
+                btnDetails.Location = new Point(10, 330);
+                btnDetails.BackColor = Color.FromArgb(70, 70, 70);
+                btnDetails.ForeColor = Color.LightGray;
+                btnDetails.FlatStyle = FlatStyle.Flat;
+                btnDetails.Tag = game;
+                btnDetails.Click += BtnDetails_Click; // 綁定新事件
+
+                Button btnEdit = new Button();
+                btnEdit.Text = "編輯設定";
+                btnEdit.Font = new Font("微軟正黑體", 9, FontStyle.Regular);
+                btnEdit.Size = new Size(180, 25);
+                btnEdit.Location = new Point(10, 370); // 調整一下卡片高度與位置
+                btnEdit.BackColor = Color.FromArgb(60, 60, 60);
+                btnEdit.ForeColor = Color.White;
+                btnEdit.FlatStyle = FlatStyle.Flat;
+                btnEdit.Tag = game;
+
+                btnEdit.Click += (s, ev) =>
+                {
+                    Button btn = s as Button;
+                    Game selectedGame = btn.Tag as Game;
+
+                    // 開啟編輯視窗
+                    using (EditGameForm editForm = new EditGameForm(selectedGame))
+                    {
+                        // 如果使用者在編輯視窗按下了「儲存變更」(DialogResult.OK)
+                        if (editForm.ShowDialog() == DialogResult.OK)
+                        {
+                            // 將更新後的資料寫回資料庫
+                            dbManager.UpdateGameInfo(editForm.CurrentGame);
+
+                            // 重新載入主畫面，讓新的名字和圖片顯示出來！
+                            LoadGamesToUI();
+                        }
+                    }
+                };
+
+
+
+                // 依序加入元件
                 card.Controls.Add(picCover);
                 card.Controls.Add(lblName);
+                card.Controls.Add(lblTime);
                 card.Controls.Add(btnPlay);
+                card.Controls.Add(btnDetails);
+                card.Controls.Add(btnEdit);
 
                 flowLayoutPanel.Controls.Add(card);
             }
@@ -253,6 +334,90 @@ namespace GameLauncher
                 g.DrawString("No Image", new Font("Arial", 12), Brushes.White, new PointF(50, 100));
             }
             return defaultBmp;
+        }
+
+        private string FormatPlayTime(int totalSeconds)
+        {
+            if (totalSeconds == 0) return "未遊玩";
+
+            TimeSpan t = TimeSpan.FromSeconds(totalSeconds);
+
+            if (t.TotalHours >= 1)
+            {
+                return $"{(int)t.TotalHours} 小時 {t.Minutes} 分";
+            }
+            if (t.TotalMinutes >= 1)
+            {
+                return $"{t.Minutes} 分 {t.Seconds} 秒";
+            }
+            return $"{t.Seconds} 秒";
+        }
+
+        private void BtnDetails_Click(object sender, EventArgs e)
+        {
+            Button btn = sender as Button;
+            Game game = btn.Tag as Game;
+            if (game == null) return;
+
+            // 從資料庫撈取歷史紀錄 DataTable
+            DataTable historyData = dbManager.GetPlayHistory(game.Id);
+
+            // 動態建立一個跳出視窗 (Form)
+            Form detailsForm = new Form();
+            detailsForm.Text = $"{game.Name} - 歷史遊玩明細";
+            detailsForm.Size = new Size(450, 400);
+            detailsForm.StartPosition = FormStartPosition.CenterParent;
+            detailsForm.FormBorderStyle = FormBorderStyle.FixedDialog;
+            detailsForm.MaximizeBox = false;
+            detailsForm.MinimizeBox = false;
+            detailsForm.BackColor = Color.FromArgb(35, 35, 35);
+
+            // 建立表格控制項 DataGridView
+            DataGridView dgv = new DataGridView();
+            dgv.Dock = DockStyle.Fill;
+            dgv.BackgroundColor = Color.FromArgb(40, 40, 40);
+            dgv.ForeColor = Color.Black; // 讓內文清晰
+            dgv.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dgv.AllowUserToAddRows = false; // 唯讀設定
+            dgv.ReadOnly = true;
+
+            // 綁定資料來源
+            dgv.DataSource = historyData;
+
+            // 將表格加進彈出視窗並顯示
+            detailsForm.Controls.Add(dgv);
+            detailsForm.ShowDialog(); // 使用 ShowDialog 確保使用者關閉此視窗前無法操作主視窗
+        }
+
+        private void RefreshCategoryFilter()
+        {
+            // 暫時解除綁定事件，避免更新選單時觸發讀取
+            cmbCategoryFilter.SelectedIndexChanged -= CmbCategoryFilter_SelectedIndexChanged;
+
+            string currentSelection = cmbCategoryFilter.SelectedItem?.ToString(); // 記住目前選的分類
+
+            cmbCategoryFilter.Items.Clear();
+            cmbCategoryFilter.Items.Add("全部"); // 預設選項
+
+            List<string> dbCategories = dbManager.GetAllCategories();
+            foreach (string cat in dbCategories)
+            {
+                cmbCategoryFilter.Items.Add(cat);
+            }
+
+            // 試著回復原本的選擇，如果沒有就選 "全部"
+            if (currentSelection != null && cmbCategoryFilter.Items.Contains(currentSelection))
+                cmbCategoryFilter.SelectedItem = currentSelection;
+            else
+                cmbCategoryFilter.SelectedIndex = 0;
+
+            // 重新綁定事件
+            cmbCategoryFilter.SelectedIndexChanged += CmbCategoryFilter_SelectedIndexChanged;
+        }
+
+        private void CmbCategoryFilter_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            LoadGamesToUI();
         }
     }
 }
